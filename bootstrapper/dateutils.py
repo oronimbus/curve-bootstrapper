@@ -1,11 +1,14 @@
 from datetime import datetime, timedelta
 from .calendars import *
 import calendar as cd
+import numpy as np
 
 
 def get_trading_holidays(start, end, cal):
     calendars = {'FD' : USTradingCalendar(),
                  'TE' : TargetTradingCalendar()}
+    
+    assert cal in calendars.keys(), "Calendar not supported yet."
     inst = calendars[cal]
     return inst.holidays(start, end)
 
@@ -55,3 +58,10 @@ def create_maturity(ref_date, tenor):
     period = int(tenor[:-1])
     num_months = period if time_unit == 'M' else 12 * period
     return add_months(ref_date, num_months)
+
+def convert_dates_to_dcf(start, dates, day_count, cal):
+    end = np.max(dates) + timedelta(days=7)
+    hols = [] if cal == '' else get_trading_holidays(start, end, cal)
+    taus =  np.array([year_frac(start, date, day_count, hols) for date in dates])
+    return taus
+    

@@ -63,7 +63,7 @@ class Future(Rate):
         self.tau = np.array([self.t1, self.t2])
         
         # adjusted rate
-        self.adj_rate = self.rate #- self.convexity_adjustment(**kwargs)
+        self.adj_rate = self.rate - self.convexity_adjustment(**kwargs)
 
 
     def convexity_adjustment(self, alpha=0.03, market_nvol=0.005):
@@ -72,12 +72,12 @@ class Future(Rate):
         x_t1_t2 = math.pow(market_nvol,2) / (2 * alpha) * b_t1_t2 * (b_t1_t2 * (1 - math.exp(-(2 * alpha * self.t1))) + alpha * b_sqrt)
         
         conv_adj = round((1 - math.exp(-x_t1_t2)) * (self.rate  + 1 / (self.t2 - self.t1)) * 100, 5)
-        return conv_adj 
+        return conv_adj / 100
     
     def par_rate(self, dfs, **kwargs):
         r_mid = -(np.log(dfs[1]) - np.log(dfs[0])) / (self.t2 - self.t1)
         convexity_adj = self.convexity_adjustment(**kwargs)
-        return r_mid #+ convexity_adj
+        return r_mid + convexity_adj
     
 class FRA(Rate):
     def __init__(self, rate, settle_date, start_date, end_date, frequency, day_count, calendar):

@@ -5,6 +5,45 @@ from scipy.optimize import least_squares, OptimizeResult
 
 import numpy as np
 
+    
+def zc_to_df(t, r, f='cont'):
+    _r = np.array(r)
+    _t = np.array(t)
+
+    # filter out t == 0
+    idx = np.where(_t != 0)[0]
+    r = _r[idx]
+    t = _t[idx]
+
+    if f == 'cont':
+        v = np.exp(-r * t)
+    elif f == 'simple':
+        v =  1 / (1 + r * t)
+    elif isinstance(f, int):
+        v =  1 / np.power(1 + r / f, f * t)
+    else:
+        raise ValueError('Frequency not supported.')
+    return v
+
+def df_to_zc(t, df, f='cont'):
+    _df = np.array(df)
+    _t = np.array(t)
+
+    # filter out t == 0
+    idx = np.where(_t != 0)[0]
+    df = _df[idx]
+    t = _t[idx]
+
+    if f == 'cont':
+        r =  -np.log(df) / t
+    elif f == 'simple':
+        r =  (1 / df - 1) / t
+    elif isinstance(f, int):
+        r = (np.power(1 / df, 1 / (f * t)) - 1) * f 
+    else:
+        raise ValueError('Frequency not supported.')    
+    return r 
+
 class Interpolator:
     def __init__(self, x, y):
         self.x = np.array(x)
@@ -31,68 +70,27 @@ class CurveInterpolator(Interpolator):
         assert (on == 'df') or (on == 'zc'), 'Parameter `on` needs to be either `df` or `zc`.'
         self.on = on
     
-    def __zc_to_df(self, t, r, f='cont'):
-        _r = np.array(r)
-        _t = np.array(t)
-        
-        # filter out t == 0
-        idx = np.where(_t != 0)[0]
-        r = _r[idx]
-        t = _t[idx]
-        
-        if f == 'cont':
-            v = np.exp(-r * t)
-        elif f == 'simple':
-            v =  1 / (1 + r * t)
-        elif isinstance(f, int):
-            v =  1 / np.power(1 + r / f, f * t)
-        else:
-            raise ValueError('Frequency not supported.')
-        return v
-
-    def __df_to_zc(self, t, df, f='cont'):
-        _df = np.array(df)
-        _t = np.array(t)
-        
-        # filter out t == 0
-        idx = np.where(_t != 0)[0]
-        df = _df[idx]
-        t = _t[idx]
-        
-        if f == 'cont':
-            r =  -np.log(df) / t
-        elif f == 'simple':
-            r =  (1 / df - 1) / t
-        elif isinstance(f, int):
-            r = (np.power(1 / df, 1 / (f * t)) - 1) * f 
-        else:
-            raise ValueError('Frequency not supported.')    
-        return r 
-    
     def interpolate(self, t_hat, how, **kwargs):
-        assert not ((self.on == 'zc') and ((how == 'log-linear') or (how == 'cubic'))), "Log interpolation not supported with `zc`."
+        assert not ((self.on == 'zc') and ((how == 'log-linear') or (how == 'cubic'))), "Log interpolation not supported on `zc`."
         interp_methods = {'log-linear': self.log_linear,
                           'linear': self.linear,
                           'convex-monotone':self.convex_monotone,
                           'cubic': self.log_cubic}
         
         if self.on == 'zc':
-            self.y = self.__df_to_zc(self.x, self.y, **kwargs)
+            self.y = df_to_zc(self.x, self.y, **kwargs)
             self.x = self.x[np.where(self.x != 0)[0]]
         
         y_hat = interp_methods[how](t_hat)
         
         if self.on == 'zc':
-            return np.append([1], self.__zc_to_df(t_hat, y_hat))
+            return np.append([1], zc_to_df(t_hat, y_hat))
         else:
             return y_hat
         
 class SwapCurve:
-    def __init__(self, settle_date, interpolation, interp_on='df', day_count='30_360', calendar='FD'):
+    def __init__(self, settle_date, interpolation, interp_on='df'):
         self.settle_date = settle_date
-        self.day_count = day_count
-        self.calendar = calendar
-        self._hols = get_trading_holidays(settle_date, settle_date + timedelta(days=365 * 70), calendar)
         
         # dictionary with all curve instruments
         self._par_curve = OrderedDict()
@@ -106,7 +104,8 @@ class SwapCurve:
         # interpolation 
         self.interpolation = interpolation
         self.interp_on = interp_on
-        self.interpolator = None
+        self._interpolator = CurveInterpolator
+
         
     @property
     def knots(self):
@@ -160,16 +159,29 @@ class SwapCurve:
             print("Dates could not be generated. Error message: {}".format(error))            
     
     def __initalise_curve(self):
-        self._knots_taus =  np.array([year_frac(self.settle_date, date, 'Actual_365', self._hols) for date in self._knots])
+        self._knots_taus =  convert_dates_to_dcf(self.settle_date, self._knots, 'Actual_365', '')
         self._knots_par_rates = np.array([np.nan] + [inst.rate if str(inst) != 'Future' else inst.adj_rate for inst in self.par_curve.values()])
         self._knots_dfs = np.exp(-self._knots_par_rates * self._knots_taus)
         self._knots_dfs[0] = 1
-        self.interpolator = CurveInterpolator(self._knots_taus, self._knots_dfs, self.interp_on)
+    
+    def __convert_times(self, t):
+        _dates = [dt_i for dt_i in dts if type(dt_i) == datetime]
+        _t = [t_i for t_i in dts if ((type(t_i) == float) or (type(t_i) == int))]
+        _ts = convert_dates_to_dcf(s23.settle_date, _dates, '30_360', 'FD')
+        ts = sorted(_t + _ts)
     
     def get_dfs(self, t_i, **kwargs):
         assert len(self.par_curve) > 0, "No instruments found."
         assert len(self.knots) > 0, "Add knots first."
-        return self.interpolator.interpolate(t_i, self.interpolation, **kwargs)
+        assert len(self.knots_dfs) > 0, "Strip curve first."
+        
+        df_int = self._interpolator(self.knots_taus, self.knots_dfs, self.interp_on).interpolate(t_i, self.interpolation, **kwargs)
+        return df_int
+    
+    def get_zcs(self, t_i, f='cont', day_count='Actual_365', **kwargs):
+        dfs = self.get_dfs(t_i, **kwargs)
+        zcs = df_to_zc(t_i, dfs, f)
+        return zcs
     
     def get_fwds(self, t_i, t_j, **kwargs):
         assert (t_j > t_i).all(), "t_j must be strictly greater than t_i."
@@ -185,6 +197,9 @@ class SwapCurve:
 
 class CurveStripper:
     def __init__(self):
+        """
+        Some default args might follow.
+        """
         pass
     
     def __calculate_inst_residual(self, inst, curvemap):
@@ -229,9 +244,11 @@ class CurveStripper:
         instruments = curve.par_curve.values()
 
         # least squares solver
+        print('Stripping Curve... Number of knots: {}'.format(k))
         result = least_squares(self.calculate_residuals, dfs_0, args=(t, instruments, interpolation, interp_on), bounds=bnds)
         
         assert isinstance(result, OptimizeResult)
+        print('Stripping successful! Residual error: {:.3e}'.format(np.sum(result.fun)))
         curve.knots_dfs[1:] = result.x
         
         return curve
