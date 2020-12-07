@@ -127,7 +127,7 @@ class Swap(Rate):
     
     @property
     def floating_year_fracs(self):
-        self._floating_year_fracs = [year_frac(self.settle_date, date, self.day_count, self.hols) for date in self.floating_schedule]
+        self._floating_year_fracs = [year_frac(self.start_date, date, self.day_count, self.hols) for date in self.floating_schedule]
         return self._floating_year_fracs
 
     def __create_fixed_schedule(self):

@@ -1,10 +1,12 @@
-from bootstrapper import CashRate, Future, Swap, create_maturity
-from datetime import datetime
+from bootstrapper import CashRate, Future, Swap, create_maturity, shift_date
+from datetime import datetime, timedelta
 
 import numpy as np
 
 
 settle = datetime(2020,12,3)
+start_date = shift_date(settle + timedelta(days=2), [])
+
 US0003M = CashRate(0.0022538, settle, settle, create_maturity(settle, "3M"), 'Actual_360', 'FD')
 EDZ0 = Future(99.7625, settle, datetime(2020,12,16), datetime(2021,3,17), 0, 'Actual_360', 'FD')
 EDH1 = Future(99.8, settle, datetime(2021,3,17), datetime(2021,6,16), 0, 'Actual_360', 'FD')
@@ -13,23 +15,23 @@ EDU1 = Future(99.795, settle, datetime(2021,9,15), datetime(2021,12,15), 0, 'Act
 EDZ1 = Future(99.75, settle, datetime(2021,12,15), datetime(2022,3,16), 0, 'Actual_360', 'FD')
 EDH2 = Future(99.755, settle, datetime(2022,3,16), datetime(2022,6,15), 0, 'Actual_360', 'FD')
 
-USSW2 = Swap(0.0023272, settle, settle, create_maturity(settle, "2Y"), 2, '30_360', 'FD')
-USSW3 = Swap(0.002773, settle, settle, create_maturity(settle, "3Y"),  2, '30_360', 'FD')
-USSW4 = Swap(0.0033555, settle, settle, create_maturity(settle, "4Y"),  2, '30_360', 'FD')
-USSW5 = Swap(0.0045214, settle, settle, create_maturity(settle, "5Y"),  2, '30_360', 'FD')
-USSW6 = Swap(0.005555, settle, settle, create_maturity(settle, "6Y"), 2, '30_360', 'FD')
-USSW7 = Swap(0.006542, settle, settle, create_maturity(settle, "7Y"),  2, '30_360', 'FD')
-USSW8 = Swap(0.007446, settle, settle, create_maturity(settle, "8Y"),  2, '30_360', 'FD')
-USSW9 = Swap(0.008268, settle, settle, create_maturity(settle, "9Y"),  2, '30_360', 'FD')
-USSW10 = Swap(0.0090095, settle, settle, create_maturity(settle, "10Y"),  2, '30_360', 'FD')
-USSW11 = Swap(0.009664, settle, settle, create_maturity(settle, "11Y"),  2, '30_360', 'FD')
-USSW12 = Swap(0.0102445, settle, settle, create_maturity(settle, "12Y"),  2, '30_360', 'FD')
-USSW15 = Swap(0.0114945, settle, settle, create_maturity(settle, "15Y"),  2, '30_360', 'FD')
-USSW20 = Swap(0.0127146, settle, settle, create_maturity(settle, "20Y"),  2, '30_360', 'FD')
-USSW25 = Swap(0.013246, settle, settle, create_maturity(settle, "25Y"),  2, '30_360', 'FD')
-USSW30 = Swap(0.0135019, settle, settle, create_maturity(settle, "30Y"),  2, '30_360', 'FD')
-USSW40 = Swap(0.0131268, settle, settle, create_maturity(settle, "40Y"),  2, '30_360', 'FD')
-USSW50 = Swap(0.0123827, settle, settle, create_maturity(settle, "50Y"),  2, '30_360', 'FD')
+USSW2 = Swap(0.0023272, settle, start_date, create_maturity(start_date, "2Y"), 2, '30_360', 'FD')
+USSW3 = Swap(0.002773, settle, start_date, create_maturity(start_date, "3Y"),  2, '30_360', 'FD')
+USSW4 = Swap(0.0033555, settle, start_date, create_maturity(start_date, "4Y"),  2, '30_360', 'FD')
+USSW5 = Swap(0.0045214, settle, start_date, create_maturity(start_date, "5Y"),  2, '30_360', 'FD')
+USSW6 = Swap(0.005555, settle, start_date, create_maturity(start_date, "6Y"), 2, '30_360', 'FD')
+USSW7 = Swap(0.006542, settle, start_date, create_maturity(start_date, "7Y"),  2, '30_360', 'FD')
+USSW8 = Swap(0.007446, settle, start_date, create_maturity(start_date, "8Y"),  2, '30_360', 'FD')
+USSW9 = Swap(0.008268, settle, start_date, create_maturity(start_date, "9Y"),  2, '30_360', 'FD')
+USSW10 = Swap(0.0090095, settle, start_date, create_maturity(start_date, "10Y"),  2, '30_360', 'FD')
+USSW11 = Swap(0.009664, settle, start_date, create_maturity(start_date, "11Y"),  2, '30_360', 'FD')
+USSW12 = Swap(0.0102445, settle, start_date, create_maturity(start_date, "12Y"),  2, '30_360', 'FD')
+USSW15 = Swap(0.0114945, settle, start_date, create_maturity(start_date, "15Y"),  2, '30_360', 'FD')
+USSW20 = Swap(0.0127146, settle, start_date, create_maturity(start_date, "20Y"),  2, '30_360', 'FD')
+USSW25 = Swap(0.013246, settle, start_date, create_maturity(start_date, "25Y"),  2, '30_360', 'FD')
+USSW30 = Swap(0.0135019, settle, start_date, create_maturity(start_date, "30Y"),  2, '30_360', 'FD')
+USSW40 = Swap(0.0131268, settle, start_date, create_maturity(start_date, "40Y"),  2, '30_360', 'FD')
+USSW50 = Swap(0.0123827, settle, start_date, create_maturity(start_date, "50Y"),  2, '30_360', 'FD')
 
 s23_instruments = [US0003M, EDZ0, EDH1, EDM1, EDU1, EDZ1, EDH2,
                    USSW2, USSW3, USSW4, USSW5, USSW6, USSW7, USSW8, USSW9, USSW10, 
