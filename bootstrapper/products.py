@@ -6,6 +6,28 @@ import calendar as cd
 import numpy as np
 import math
 
+
+def create_schedule(start_date, end_date, frequency, day_count, hols):
+    pay_date = start_date
+    schedule = []
+    cashflows = OrderedDict()
+
+    while pay_date < end_date:
+        try:
+            period = int(12 / frequency)
+            tmp_date = add_months(pay_date, period)
+            pay_date = shift_date(tmp_date, hols)
+            schedule.append(pay_date)
+        except:
+            raise "Zero Coupon not supported yet."
+
+    schdl = [start_date] + schedule
+    taus = [year_frac(i, j, day_count, hols) for i,j in zip(schdl[:-1], schdl[1:])]
+    cashflows = dict(zip(schedule, taus))
+
+    return cashflows
+
+
 class Rate:
     def __init__(self, rate, settle_date, start_date, end_date, frequency, day_count, calendar):
         self.rate = rate
@@ -98,8 +120,9 @@ class FRA(Rate):
     
     
 class Swap(Rate):
-    def __init__(self, rate, settle_date, start_date, end_date, frequency, day_count, calendar):
+    def __init__(self, rate, settle_date, start_date, end_date, frequency, float_frequency, day_count, calendar):
         Rate.__init__(self, rate, settle_date, start_date, end_date, frequency, day_count, calendar)
+        self.float_frequency = float_frequency
         
         # schedules
         self._fixed_schedule = OrderedDict()
@@ -112,12 +135,12 @@ class Swap(Rate):
         
     @property
     def fixed_schedule(self):
-        self._fixed_schedule = self.__create_fixed_schedule()
+        self._fixed_schedule = create_schedule(self.start_date, self.end_date, self.frequency, self.day_count, self.hols)
         return self._fixed_schedule
     
     @property
     def floating_schedule(self):
-        self._floating_schedule = self.__create_floating_schedule()
+        self._floating_schedule = create_schedule(self.start_date, self.end_date, self.float_frequency, self.day_count, self.hols)
         return self._floating_schedule
     
     @property
@@ -129,29 +152,6 @@ class Swap(Rate):
     def floating_year_fracs(self):
         self._floating_year_fracs = [year_frac(self.start_date, date, self.day_count, self.hols) for date in self.floating_schedule]
         return self._floating_year_fracs
-
-    def __create_fixed_schedule(self):
-        pay_date = self.start_date
-        schedule = []
-        cashflows = OrderedDict()
-        
-        while pay_date < self.end_date:
-            try:
-                period = int(12 / self.frequency)
-                tmp_date = add_months(pay_date, period)
-                pay_date = shift_date(tmp_date, self.hols)
-                schedule.append(pay_date)
-            except:
-                raise "Zero Coupon not supported yet."
-        
-        schdl = [self.start_date] + schedule
-        taus = [year_frac(i, j, self.day_count, self.hols) for i,j in zip(schdl[:-1], schdl[1:])]
-        cashflows = dict(zip(schedule, taus))
-        
-        return cashflows
-    
-    def __create_floating_schedule(self):
-        raise NotImplementedError('Floating schedule not supported yet.')
     
     def par_rate(self, dfs):
         float_leg = 1.0

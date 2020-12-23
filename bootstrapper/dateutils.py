@@ -6,7 +6,8 @@ import numpy as np
 
 def get_trading_holidays(start, end, cal):
     calendars = {'FD' : USTradingCalendar(),
-                 'TE' : TargetTradingCalendar()}
+                 'TE' : TargetTradingCalendar(),
+                 'LN' : UKTradingCalendar()}
     
     assert cal in calendars.keys(), "Calendar not supported yet."
     inst = calendars[cal]

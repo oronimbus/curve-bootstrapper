@@ -1,6 +1,7 @@
 from pandas.tseries.holiday import AbstractHolidayCalendar, Holiday, nearest_workday, \
     USMartinLutherKingJr, USPresidentsDay, GoodFriday, USMemorialDay, \
-    USLaborDay, USThanksgivingDay, EasterMonday
+    USLaborDay, USThanksgivingDay, EasterMonday, DateOffset, MO, \
+    next_monday, next_monday_or_tuesday
 
 
 class USTradingCalendar(AbstractHolidayCalendar):
@@ -28,4 +29,15 @@ class TargetTradingCalendar(AbstractHolidayCalendar):
         Holiday('Christmas', month=12, day=25, observance=nearest_workday),
         Holiday('BoxingDay', month=12, day=26, observance=nearest_workday)
         
+    ]
+    
+class UKTradingCalendar(AbstractHolidayCalendar):
+    rules = [
+        Holiday('New Years Day', month=1, day=1, observance=next_monday),
+        GoodFriday,
+        Holiday('Early May Bank Holiday', month=5, day=1, offset=DateOffset(weekday=MO(1))),
+        Holiday('Spring Bank Holiday', month=5, day=31, offset=DateOffset(weekday=MO(-1))),
+        Holiday('Summer Bank Holiday', month=8, day=31, offset=DateOffset(weekday=MO(-1))),
+        Holiday('Christmas Day', month=12, day=25, observance=next_monday),
+        Holiday('Boxing Day', month=12, day=26, observance=next_monday_or_tuesday)
     ]
