@@ -4,6 +4,7 @@ from scipy.interpolate import interp1d
 from scipy.optimize import least_squares, OptimizeResult
 
 import numpy as np
+import pandas as pd
 
     
 def zc_to_df(t, r, f='cont'):
@@ -99,6 +100,7 @@ class SwapCurve:
         self._knots = [] 
         self._knots_taus = []
         self._knots_dfs = []
+        self._knots_zcs = []
         self._knots_par_rates = []
         
         # interpolation 
@@ -119,9 +121,17 @@ class SwapCurve:
     def knots_dfs(self):
         return self._knots_dfs
     
+    @property
+    def knots_zcs(self):
+        return self._knots_zcs
+    
     @knots_dfs.setter
     def knots_dfs(self, dfs):
         self._knots_dfs = dfs
+        
+    @knots_zcs.setter
+    def knots_zcs(self, zcs):
+        self._knots_zcs = zcs
     
     @property
     def knots_par_rates(self):
@@ -161,9 +171,10 @@ class SwapCurve:
     def __initalise_curve(self):
         self._knots_taus =  convert_dates_to_dcf(self.settle_date, self._knots, 'Actual_365', '')
         self._knots_par_rates = np.array([np.nan] + [inst.rate if str(inst) != 'Future' else inst.adj_rate for inst in self.par_curve.values()])
+        self._knots_zcs = np.copy(self._knots_par_rates)
         self._knots_dfs = np.exp(-self._knots_par_rates * self._knots_taus)
         self._knots_dfs[0] = 1
-    
+        
     def __convert_times(self, t):
         _dates = [dt_i for dt_i in dts if type(dt_i) == datetime]
         _t = [t_i for t_i in dts if ((type(t_i) == float) or (type(t_i) == int))]
@@ -190,6 +201,25 @@ class SwapCurve:
         t = t_j - t_i
         fwds = -(np.log(df_j) - np.log(df_i)) / t
         return fwds
+    
+    def df(self):
+        assert len(self.par_curve) > 0, "No instruments found."
+
+        instruments = [pd.DataFrame({'Type' : [str(inst)], 
+                                     'Start Date' : [inst.start_date], 
+                                     'End Date' : [inst.end_date], 
+                                     'Par Rate' : [inst.rate * 100]}) for inst in self.par_curve.values()]
+        
+        instruments_df = pd.concat(instruments)
+        instruments_df.index = np.arange(len(self.par_curve))
+
+        stripped_df = pd.DataFrame({'DF' : self.knots_dfs[1:],
+                                    'ZC' : self.knots_zcs[1:] * 100})
+        
+        concat_df = pd.concat([instruments_df, stripped_df], axis=1)
+        concat_df.index += 1
+        return concat_df
+
     
     def __repr__(self):
         return "Swap Curve Object | Number of instruments: {}".format(str(len(self.par_curve)))
@@ -250,5 +280,6 @@ class CurveStripper:
         assert isinstance(result, OptimizeResult)
         print('Stripping successful! Residual error: {:.3e}'.format(np.sum(result.fun)))
         curve.knots_dfs[1:] = result.x
+        curve.knots_zcs[1:] = -np.log(result.x) / t
         
         return curve
