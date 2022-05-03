@@ -22,14 +22,16 @@ def create_schedule(start_date, end_date, frequency, day_count, hols):
             raise "Zero Coupon not supported yet."
 
     schdl = [start_date] + schedule
-    taus = [year_frac(i, j, day_count, hols) for i,j in zip(schdl[:-1], schdl[1:])]
+    taus = [year_frac(i, j, day_count, hols) for i, j in zip(schdl[:-1], schdl[1:])]
     cashflows = dict(zip(schedule, taus))
 
     return cashflows
 
 
 class Rate:
-    def __init__(self, rate, settle_date, start_date, end_date, frequency, day_count, calendar):
+    def __init__(
+        self, rate, settle_date, start_date, end_date, frequency, day_count, calendar
+    ):
         self.rate = rate
         self.frequency = frequency
         self.day_count = day_count
@@ -38,125 +40,217 @@ class Rate:
         self.settle_date = shift_date(settle_date, self.hols)
         self.start_date = shift_date(start_date, self.hols)
         self.end_date = shift_date(end_date, self.hols)
-        
+
     def __str__(self):
         return self.__class__.__name__
-    
+
     def __repr__(self):
-        
-        freq_dict = {0: 'Zero',
-                     1: 'Annual',
-                     2: 'Semi-Annual',
-                     4: 'Quarterly',
-                     12: 'Monthly'}
-        
-        print_rate = round(self.rate * 100,4)
-        print_start = datetime.strftime(self.start_date, '%Y-%m-%d')
-        print_end = datetime.strftime(self.end_date, '%Y-%m-%d')
+
+        freq_dict = {
+            0: "Zero",
+            1: "Annual",
+            2: "Semi-Annual",
+            4: "Quarterly",
+            12: "Monthly",
+        }
+
+        print_rate = round(self.rate * 100, 4)
+        print_start = datetime.strftime(self.start_date, "%Y-%m-%d")
+        print_end = datetime.strftime(self.end_date, "%Y-%m-%d")
         print_freq = freq_dict[self.frequency]
-        
-        print_str =  """{} | Interest Rate: {}% | \
+
+        print_str = """{} | Interest Rate: {}% | \
                         Effective: {} | Maturity: {} | Frequency: {} | \
-                        Day Count Conv.: {}""".format(self.__class__.__name__, print_rate, print_start, 
-                                                      print_end, print_freq, self.day_count)
+                        Day Count Conv.: {}""".format(
+            self.__class__.__name__,
+            print_rate,
+            print_start,
+            print_end,
+            print_freq,
+            self.day_count,
+        )
         return print_str
+
 
 class CashRate(Rate):
     def __init__(self, rate, settle_date, start_date, end_date, day_count, calendar):
-        self.frequency = 0 
-        Rate.__init__(self, rate, settle_date, start_date, end_date, self.frequency, day_count, calendar)
-        
+        self.frequency = 0
+        Rate.__init__(
+            self,
+            rate,
+            settle_date,
+            start_date,
+            end_date,
+            self.frequency,
+            day_count,
+            calendar,
+        )
+
         # dates
         self.t1 = year_frac(self.start_date, self.end_date, self.day_count, self.hols)
         self.tau = np.array([self.t1])
-        
+
     def par_rate(self, dfs):
         return self.rate
 
+
 class Future(Rate):
-    def __init__(self, price, settle_date, start_date, end_date, frequency, day_count, calendar, **kwargs):
+    def __init__(
+        self,
+        price,
+        settle_date,
+        start_date,
+        end_date,
+        frequency,
+        day_count,
+        calendar,
+        **kwargs
+    ):
         self.price = price
         self.rate = (100 - self.price) / 100
-        Rate.__init__(self, self.rate, settle_date, start_date, end_date, frequency, day_count, calendar)        
-        
+        Rate.__init__(
+            self,
+            self.rate,
+            settle_date,
+            start_date,
+            end_date,
+            frequency,
+            day_count,
+            calendar,
+        )
+
         # dates
-        self.t1 = year_frac(self.settle_date, self.start_date, self.day_count, self.hols)
+        self.t1 = year_frac(
+            self.settle_date, self.start_date, self.day_count, self.hols
+        )
         self.t2 = year_frac(self.settle_date, self.end_date, self.day_count, self.hols)
         self.tau = np.array([self.t1, self.t2])
-        
+
         # adjusted rate
         self.adj_rate = self.rate - self.convexity_adjustment(**kwargs)
-
 
     def convexity_adjustment(self, alpha=0.03, market_nvol=0.005):
         b_t1_t2 = (1 - (math.exp(-alpha * (self.t2 - self.t1)))) / alpha
         b_sqrt = math.pow((1 - math.exp(-alpha * self.t1)) / alpha, 2)
-        x_t1_t2 = math.pow(market_nvol,2) / (2 * alpha) * b_t1_t2 * (b_t1_t2 * (1 - math.exp(-(2 * alpha * self.t1))) + alpha * b_sqrt)
-        
-        conv_adj = round((1 - math.exp(-x_t1_t2)) * (self.rate  + 1 / (self.t2 - self.t1)) * 100, 5)
+        x_t1_t2 = (
+            math.pow(market_nvol, 2)
+            / (2 * alpha)
+            * b_t1_t2
+            * (b_t1_t2 * (1 - math.exp(-(2 * alpha * self.t1))) + alpha * b_sqrt)
+        )
+
+        conv_adj = round(
+            (1 - math.exp(-x_t1_t2)) * (self.rate + 1 / (self.t2 - self.t1)) * 100, 5
+        )
         return conv_adj / 100
-    
+
     def par_rate(self, dfs, **kwargs):
         r_mid = -(np.log(dfs[1]) - np.log(dfs[0])) / (self.t2 - self.t1)
         convexity_adj = self.convexity_adjustment(**kwargs)
         return r_mid + convexity_adj
-    
+
+
 class FRA(Rate):
-    def __init__(self, rate, settle_date, start_date, end_date, frequency, day_count, calendar):
-        Rate.__init__(self, rate, settle_date, start_date, end_date, frequency, day_count, calendar)
+    def __init__(
+        self, rate, settle_date, start_date, end_date, frequency, day_count, calendar
+    ):
+        Rate.__init__(
+            self,
+            rate,
+            settle_date,
+            start_date,
+            end_date,
+            frequency,
+            day_count,
+            calendar,
+        )
 
         # dates
-        self.t1 = year_frac(self.settle_date, self.start_date, self.day_count, self.hols)
+        self.t1 = year_frac(
+            self.settle_date, self.start_date, self.day_count, self.hols
+        )
         self.t2 = year_frac(self.settle_date, self.end_date, self.day_count, self.hols)
         self.tau = np.array([self.t1, self.t2])
-        
+
     def cashflow(self, forward):
         t = year_frac(self.start_date, self.end_date, self.day_count, self.hols)
         return (t * (forward - self.rate)) / (1 + t * forward)
-    
+
     def par_rate(self, dfs, **kwargs):
         r_mid = -(np.log(dfs[1]) - np.log(dfs[0])) / (self.t2 - self.t1)
-        return r_mid 
-    
-    
+        return r_mid
+
+
 class Swap(Rate):
-    def __init__(self, rate, settle_date, start_date, end_date, frequency, float_frequency, day_count, calendar):
-        Rate.__init__(self, rate, settle_date, start_date, end_date, frequency, day_count, calendar)
+    def __init__(
+        self,
+        rate,
+        settle_date,
+        start_date,
+        end_date,
+        frequency,
+        float_frequency,
+        day_count,
+        calendar,
+    ):
+        Rate.__init__(
+            self,
+            rate,
+            settle_date,
+            start_date,
+            end_date,
+            frequency,
+            day_count,
+            calendar,
+        )
         self.float_frequency = float_frequency
-        
+
         # schedules
         self._fixed_schedule = OrderedDict()
         self._floating_schedule = OrderedDict()
-        
+
         # dcf[0, t_i] for coupons
         self._fixed_year_fracs = []
         self._floating_year_fracs = []
         self.tau = self.fixed_year_fracs
-        
+
     @property
     def fixed_schedule(self):
-        self._fixed_schedule = create_schedule(self.start_date, self.end_date, self.frequency, self.day_count, self.hols)
+        self._fixed_schedule = create_schedule(
+            self.start_date, self.end_date, self.frequency, self.day_count, self.hols
+        )
         return self._fixed_schedule
-    
+
     @property
     def floating_schedule(self):
-        self._floating_schedule = create_schedule(self.start_date, self.end_date, self.float_frequency, self.day_count, self.hols)
+        self._floating_schedule = create_schedule(
+            self.start_date,
+            self.end_date,
+            self.float_frequency,
+            self.day_count,
+            self.hols,
+        )
         return self._floating_schedule
-    
+
     @property
     def fixed_year_fracs(self):
-        self._fixed_year_fracs = [year_frac(self.start_date, date, self.day_count, self.hols) for date in self.fixed_schedule]
+        self._fixed_year_fracs = [
+            year_frac(self.start_date, date, self.day_count, self.hols)
+            for date in self.fixed_schedule
+        ]
         return self._fixed_year_fracs
-    
+
     @property
     def floating_year_fracs(self):
-        self._floating_year_fracs = [year_frac(self.start_date, date, self.day_count, self.hols) for date in self.floating_schedule]
+        self._floating_year_fracs = [
+            year_frac(self.start_date, date, self.day_count, self.hols)
+            for date in self.floating_schedule
+        ]
         return self._floating_year_fracs
-    
+
     def par_rate(self, dfs):
         float_leg = 1.0
         t = np.array(list(self.fixed_schedule.values()))
         fixed_leg = np.sum(dfs * t)
         r_mid = (float_leg - dfs[-1]) / fixed_leg
         return r_mid
-        
