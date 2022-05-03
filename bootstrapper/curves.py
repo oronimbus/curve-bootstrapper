@@ -1,13 +1,20 @@
+"""Main module for curve stripping and objective minimization."""
+
 from collections import OrderedDict
-from .dateutils import *
-from scipy.interpolate import interp1d
-from scipy.optimize import least_squares, OptimizeResult
+from datetime import datetime
+from typing import Iterable
 
 import numpy as np
 import pandas as pd
+from scipy.interpolate import interp1d
+from scipy.optimize import OptimizeResult, least_squares
+
+from bootstrapper.dateutils import convert_dates_to_dcf
+from bootstrapper.products import Rate
 
 
-def zc_to_df(t, r, f="cont"):
+def zc_to_df(t: Iterable, r: Iterable, f: str = "cont") -> np.array:
+    """Convert zero coupon rates to discount factors."""
     _r = np.array(r)
     _t = np.array(t)
 
@@ -27,7 +34,8 @@ def zc_to_df(t, r, f="cont"):
     return v
 
 
-def df_to_zc(t, df, f="cont"):
+def df_to_zc(t: Iterable, df: Iterable, f: str = "cont") -> np.array:
+    """Convert discount factors to zero coupon rates."""
     _df = np.array(df)
     _t = np.array(t)
 
@@ -48,23 +56,30 @@ def df_to_zc(t, df, f="cont"):
 
 
 class Interpolator:
-    def __init__(self, x, y):
+    """Base interpolator class supporting common schemes."""
+
+    def __init__(self, x: Iterable, y: Iterable):
         self.x = np.array(x)
         self.y = np.array(y)
 
-    def linear(self, x_i):
+    def linear(self, x_i: float) -> float:
+        """Linear interpolation using scipy."""
         return interp1d(self.x, self.y, kind="linear", fill_value="extrapolate")(x_i)
 
-    def log_linear(self, x_i):
+    def log_linear(self, x_i: float) -> float:
+        """Linear interpolation in log space using scipy."""
         log_y = np.log(self.y)
         return np.exp(
             interp1d(self.x, log_y, kind="linear", fill_value="extrapolate")(x_i)
         )
 
-    def convex_monotone(self, x_i):
+    def convex_monotone(self, x_i: float) -> float:
+        """Hagan & West implementation for convex-monotone splines."""
+        # TODO: add Hagan & West implementation for convex monotone splines
         pass
 
-    def log_cubic(self, x_i):
+    def log_cubic(self, x_i: float) -> float:
+        """Log cubic interpolation using scipy."""
         log_y = np.log(self.y)
         return np.exp(
             interp1d(self.x, log_y, kind="cubic", fill_value="extrapolate")(x_i)
@@ -72,17 +87,13 @@ class Interpolator:
 
 
 class CurveInterpolator(Interpolator):
-    def __init__(self, x, y, on):
+    """Interpolator for curves."""
+
+    def __init__(self, x: Iterable, y: Iterable, on: str):
         Interpolator.__init__(self, x, y)
-        assert (on == "df") or (
-            on == "zc"
-        ), "Parameter `on` needs to be either `df` or `zc`."
         self.on = on
 
-    def interpolate(self, t_hat, how, **kwargs):
-        assert not (
-            (self.on == "zc") and ((how == "log-linear") or (how == "cubic"))
-        ), "Log interpolation not supported on `zc`."
+    def interpolate(self, t_hat: Iterable, how: str, **kwargs: dict) -> np.array:
         interp_methods = {
             "log-linear": self.log_linear,
             "linear": self.linear,
@@ -103,7 +114,11 @@ class CurveInterpolator(Interpolator):
 
 
 class SwapCurve:
-    def __init__(self, settle_date, interpolation, interp_on="df"):
+    """Swap curve class storing all data."""
+
+    def __init__(
+        self, settle_date: datetime, interpolation: str, interp_on: str = "df"
+    ):
         self.settle_date = settle_date
 
         # dictionary with all curve instruments
@@ -153,27 +168,28 @@ class SwapCurve:
     def par_curve(self):
         return self._par_curve
 
-    def add_inst(self, inst):
+    def add_inst(self, inst: Rate):
+        """Add instrument to curve set."""
         if inst not in self._par_curve.values():
             i = len(self._par_curve) + 1
             self._par_curve[i] = inst
 
-    def remove_inst(self, inst):
+    def remove_inst(self, inst: Rate):
+        """Remove instrument from curve set."""
         if inst in self._par_curve.values():
             del self._par_curve[inst]
 
-    def add_knots(self, align_with_insts=True, **kwargs):
-        if align_with_insts == True:
+    def add_knots(self, align_with_insts: bool = True, **kwargs: dict):
+        """Add instruments from curve set to curve knots."""
+        if align_with_insts:
             self._knots = sorted(self.__build_dates())
             self.__initalise_curve()
 
-        elif align_with_insts == False:
+        else:
             raise NotImplementedError("Custom knots not supported yet.")
 
-        else:
-            raise ValueError("align_with_insts needs to be a bool.")
-
     def __build_dates(self):
+        """Build dates for curve knots."""
         try:
             return [self.settle_date] + [
                 inst.end_date for inst in self.par_curve.values()
@@ -183,6 +199,7 @@ class SwapCurve:
             print("Dates could not be generated. Error message: {}".format(error))
 
     def __initalise_curve(self):
+        """Stage instruments and load curve knots."""
         self._knots_taus = convert_dates_to_dcf(
             self.settle_date, self._knots, "Actual_365", ""
         )
@@ -197,13 +214,8 @@ class SwapCurve:
         self._knots_dfs = np.exp(-self._knots_par_rates * self._knots_taus)
         self._knots_dfs[0] = 1
 
-    def __convert_times(self, t):
-        _dates = [dt_i for dt_i in dts if type(dt_i) == datetime]
-        _t = [t_i for t_i in dts if ((type(t_i) == float) or (type(t_i) == int))]
-        _ts = convert_dates_to_dcf(s23.settle_date, _dates, "30_360", "FD")
-        ts = sorted(_t + _ts)
-
-    def get_dfs(self, t_i, **kwargs):
+    def get_dfs(self, t_i: Iterable, **kwargs: dict) -> np.array:
+        """Get interpolated discount factors from calibrated curve."""
         assert len(self.par_curve) > 0, "No instruments found."
         assert len(self.knots) > 0, "Add knots first."
         assert len(self.knots_dfs) > 0, "Strip curve first."
@@ -213,12 +225,20 @@ class SwapCurve:
         ).interpolate(t_i, self.interpolation, **kwargs)
         return df_int
 
-    def get_zcs(self, t_i, f="cont", day_count="Actual_365", **kwargs):
+    def get_zcs(
+        self,
+        t_i: Iterable,
+        f: str = "cont",
+        day_count: str = "Actual_365",
+        **kwargs: dict
+    ) -> np.array:
+        """Get interpolated zero coupon rates from calibrated curve."""
         dfs = self.get_dfs(t_i, **kwargs)
         zcs = df_to_zc(t_i, dfs, f)
         return zcs
 
-    def get_fwds(self, t_i, t_j, **kwargs):
+    def get_fwds(self, t_i: Iterable, t_j: Iterable, **kwargs: dict) -> np.array:
+        """Get interpolated forwards from calibrated curve."""
         assert (t_j > t_i).all(), "t_j must be strictly greater than t_i."
         df_i = self.get_dfs(t_i, **kwargs)
         df_j = self.get_dfs(t_j, **kwargs)
@@ -226,7 +246,8 @@ class SwapCurve:
         fwds = -(np.log(df_j) - np.log(df_i)) / t
         return fwds
 
-    def df(self):
+    def df(self) -> pd.DataFrame:
+        """Convert curve set into a pandas DataFrame."""
         assert len(self.par_curve) > 0, "No instruments found."
 
         instruments = [
@@ -259,19 +280,22 @@ class SwapCurve:
 
 
 class CurveStripper:
+    """Strip swap curve using multidimensional solver."""
+
     def __init__(self):
-        """
-        Some default args might follow.
-        """
         pass
 
-    def __calculate_inst_residual(self, inst, curvemap):
+    def __calculate_inst_residual(self, inst: Rate, curvemap: dict) -> float:
+        """Calculate residuals from calibrated rate to curve instrument."""
         dfs = [df for t, df in curvemap.items() if t in inst.tau]
         target_rate = inst.rate if str(inst) != "Future" else inst.adj_rate
         par_rate = inst.par_rate(dfs)
         return target_rate - par_rate
 
-    def calculate_residuals(self, dfs, t, instruments, how, on):
+    def calculate_residuals(
+        self, dfs: Iterable, t: Iterable, instruments: Iterable, how: str, on: str
+    ) -> list:
+        """Calculate residuals of calibrated curve to market rates."""
         # define residuals for LS optimizer
         residuals = []
 
@@ -287,16 +311,17 @@ class CurveStripper:
             residuals.append(residual)
         return residuals
 
-    def get_dofs(self, instruments):
+    def get_dofs(self, instruments: Iterable):
+        """Get degrees of freedom from curve instruments."""
         dofs = []
         for inst in instruments:
             dofs += list(inst.tau)
         return sorted(list(set(dofs)))
 
-    def strip_curve(self, curve, interpolation="log-linear", interp_on="df"):
-        assert len(curve.par_curve) > 0, "Add instruments before stripping."
-        assert len(curve.knots) > 0, "Add knots before stripping."
-
+    def strip_curve(
+        self, curve: SwapCurve, interpolation: str = "log-linear", interp_on: str = "df"
+    ) -> SwapCurve:
+        """Strip curve using interpolation scheme."""
         # bounds
         k = len(curve.knots) - 1
         bnds = (np.zeros(k), np.inf * np.ones(k))

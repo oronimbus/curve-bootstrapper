@@ -1,10 +1,16 @@
-from datetime import datetime, timedelta
-from .calendars import *
+"""Utility functions for date creation and day count calculations."""
+
 import calendar as cd
+from datetime import datetime, timedelta
+
 import numpy as np
 
+from bootstrapper.calendars import (TargetTradingCalendar, UKTradingCalendar,
+                                    USTradingCalendar)
 
-def get_trading_holidays(start, end, cal):
+
+def get_trading_holidays(start: datetime, end: datetime, cal: str) -> list:
+    """Create list of holidays according to specified trading calendar."""
     calendars = {
         "FD": USTradingCalendar(),
         "TE": TargetTradingCalendar(),
@@ -16,17 +22,20 @@ def get_trading_holidays(start, end, cal):
     return inst.holidays(start, end)
 
 
-def shift_date(date, holidays):
+def shift_date(date: datetime, holidays: list) -> datetime:
+    """Move date to next available business day."""
     while (date in holidays) or (date.weekday() == 5) or (date.weekday() == 6):
         date += timedelta(1)
     return date
 
 
-def actual_360(t_i, t_j):
+def actual_360(t_i: datetime, t_j: datetime) -> timedelta:
+    """Calculate year fraction between two dates using ACT/360."""
     return (t_j - t_i) / timedelta(360)
 
 
-def thirty_360(t_i, t_j):
+def thirty_360(t_i: datetime, t_j: datetime) -> timedelta:
+    """Calculate year fraction between two dates using 30/360."""
     d1 = min(30, t_i.day)
     d2 = min(30, t_j.day)
     days_between = (
@@ -35,15 +44,18 @@ def thirty_360(t_i, t_j):
     return days_between / 360
 
 
-def actual_365(t_i, t_j):
+def actual_365(t_i: datetime, t_j: datetime) -> timedelta:
+    """Calculate year fraction between two dates using ACT/365."""
     return (t_j - t_i) / timedelta(365)
 
 
-def actual_actual(t_i, t_j):
+def actual_actual(t_i: datetime, t_j: datetime) -> timedelta:
+    """Calculate year fraction between two dates using ACT/ACT."""
     return (t_j - t_i) / timedelta(365.25)
 
 
-def add_months(start_date, months):
+def add_months(start_date: datetime, months: int) -> datetime:
+    """Add specified number of months to date.."""
     month = start_date.month - 1 + months
     year = start_date.year + month // 12
     month = month % 12 + 1
@@ -51,7 +63,8 @@ def add_months(start_date, months):
     return datetime(year, month, day)
 
 
-def year_frac(t_i, t_j, day_count, hols):
+def year_frac(t_i: datetime, t_j: datetime, day_count: str, hols: list) -> timedelta:
+    """Calculate year fraction acording to bus. day adjustment."""
     calc_yf = {
         "Actual_360": actual_360,
         "30_360": thirty_360,
@@ -63,9 +76,8 @@ def year_frac(t_i, t_j, day_count, hols):
     return calc_yf[day_count](t_i, t_j)
 
 
-def create_maturity(ref_date, tenor):
-    assert isinstance(tenor, str), "Tenor not a string."
-    assert isinstance(ref_date, datetime), "Reference date not of type `datetime`."
+def create_maturity(ref_date: datetime, tenor: str) -> datetime:
+    """Create maturity date according to specified tenor."""
     time_unit = tenor[-1].upper()
     assert (time_unit == "M") or (
         time_unit == "Y"
@@ -76,7 +88,10 @@ def create_maturity(ref_date, tenor):
     return add_months(ref_date, num_months)
 
 
-def convert_dates_to_dcf(start, dates, day_count, cal):
+def convert_dates_to_dcf(
+    start: datetime, dates: list, day_count: str, cal: str
+) -> list:
+    """Convert list of dates to list of day count fractions."""
     end = np.max(dates) + timedelta(days=7)
     hols = [] if cal == "" else get_trading_holidays(start, end, cal)
     taus = np.array([year_frac(start, date, day_count, hols) for date in dates])

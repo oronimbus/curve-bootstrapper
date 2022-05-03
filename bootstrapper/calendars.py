@@ -1,22 +1,16 @@
-from pandas.tseries.holiday import (
-    AbstractHolidayCalendar,
-    Holiday,
-    nearest_workday,
-    USMartinLutherKingJr,
-    USPresidentsDay,
-    GoodFriday,
-    USMemorialDay,
-    USLaborDay,
-    USThanksgivingDay,
-    EasterMonday,
-    DateOffset,
-    MO,
-    next_monday,
-    next_monday_or_tuesday,
-)
+"""Collection of trading calendars for business day adjustment purpose."""
+
+from pandas.tseries.holiday import (MO, AbstractHolidayCalendar, DateOffset,
+                                    EasterMonday, GoodFriday, Holiday,
+                                    USLaborDay, USMartinLutherKingJr,
+                                    USMemorialDay, USPresidentsDay,
+                                    USThanksgivingDay, nearest_workday,
+                                    next_monday, next_monday_or_tuesday)
 
 
 class USTradingCalendar(AbstractHolidayCalendar):
+    """Return US trading calendar using Pandas base class."""
+
     rules = [
         Holiday("NewYearsDay", month=1, day=1, observance=nearest_workday),
         USMartinLutherKingJr,
@@ -31,9 +25,7 @@ class USTradingCalendar(AbstractHolidayCalendar):
 
 
 class TargetTradingCalendar(AbstractHolidayCalendar):
-    """
-    TARGET: https://www.ecb.europa.eu/press/pr/date/2000/html/pr001214_4.en.html
-    """
+    """Return EU (TARGET) trading calendar using Pandas base class."""
 
     rules = [
         Holiday("NewYearsDay", month=1, day=1, observance=nearest_workday),
@@ -46,6 +38,8 @@ class TargetTradingCalendar(AbstractHolidayCalendar):
 
 
 class UKTradingCalendar(AbstractHolidayCalendar):
+    """Return UK trading calendar using Pandas base class."""
+
     rules = [
         Holiday("New Years Day", month=1, day=1, observance=next_monday),
         GoodFriday,
