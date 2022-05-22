@@ -1,5 +1,6 @@
 """Main module for curve stripping and objective minimization."""
 
+import logging
 from collections import OrderedDict
 from datetime import datetime
 from typing import Iterable
@@ -11,6 +12,8 @@ from scipy.optimize import OptimizeResult, least_squares
 
 from bootstrapper.dateutils import convert_dates_to_dcf
 from bootstrapper.products import Rate
+
+logger = logging.getLogger(__name__)
 
 
 def zc_to_df(t: Iterable, r: Iterable, f: str = "cont") -> np.array:
@@ -94,6 +97,7 @@ class CurveInterpolator(Interpolator):
         self.on = on
 
     def interpolate(self, t_hat: Iterable, how: str, **kwargs: dict) -> np.array:
+        """Interpolate along time axis given interpolation scheme."""
         interp_methods = {
             "log-linear": self.log_linear,
             "linear": self.linear,
@@ -196,7 +200,9 @@ class SwapCurve:
             ]
 
         except Exception as error:
-            print("Dates could not be generated. Error message: {}".format(error))
+            logger.warning(
+                "Dates could not be generated. Error message: {}".format(error)
+            )
 
     def __initalise_curve(self):
         """Stage instruments and load curve knots."""
@@ -332,7 +338,7 @@ class CurveStripper:
         instruments = curve.par_curve.values()
 
         # least squares solver
-        print("Stripping Curve... Number of knots: {}".format(k))
+        logger.info("Stripping Curve... Number of knots: {}".format(k))
         result = least_squares(
             self.calculate_residuals,
             dfs_0,
@@ -341,7 +347,9 @@ class CurveStripper:
         )
 
         assert isinstance(result, OptimizeResult)
-        print("Stripping successful! Residual error: {:.3e}".format(np.sum(result.fun)))
+        logger.info(
+            "Stripping successful! Residual error: {:.3e}".format(np.sum(result.fun))
+        )
         curve.knots_dfs[1:] = result.x
         curve.knots_zcs[1:] = -np.log(result.x) / t
 
