@@ -5,7 +5,7 @@ This is a simple curve bootstrapper that was built a couple of years ago to illu
 It was not developed with OIS stripping in mind but could be easily extended to allow for a multi-curve framework. Please refer to the notebook for usage.
 
 ## Install
-To install you can either create your own dist and install it by running `python setup.py bdist_wheel && cd dist && pip install bootstrapper-0.1.0-py3-none-any.whl` or just download the wheel directly from the righthand side.
+To install you can either create your own dist and install it by running `python setup.py bdist_wheel && cd dist && pip install bootstrapper-0.1.0-py3-none-any.whl` or just download the wheel directly from the righthand side. I was too lazy to upload to PyPi soz.
 
 
 ## Workflow
